@@ -12,5 +12,5 @@ Some of the implemented features include:
   * Bot runtime/RAM usage
   * Slot machine mini-game with emotes
   * Chat pyramid of emotes
-* Custom logging system
+* SQL database for chat logs using SQLite
 * Support for third party emotes such as BTTV, FFZ and 7TV

@@ -1,6 +1,8 @@
 ﻿using System;
-using System.IO;
+using System.Data;
+using System.Data.SQLite;
 using System.Threading.Tasks;
+using Dapper;
 using TwitchLib.Client;
 using TwitchLib.Client.Events;
 using TwitchLib.Client.Models;
@@ -62,37 +64,35 @@ namespace TwitchBot
 
         private static void Client_OnLog(object sender, OnLogArgs ex)
         {
-            FileStream ostrm;
-            StreamWriter writer;
-            try
-            {
-                ostrm = new FileStream("./Redirect.txt", FileMode.Append, FileAccess.Write);
-                writer = new StreamWriter(ostrm);
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine("Cannot open Redirect.txt for writing.");
-                Console.WriteLine(e.Message);
-                return;
-            }
-
             string data = $"{ex.Data}";
-            int index = data.IndexOf("user-type=", StringComparison.Ordinal);
-            if (index != -1)
-            {
-                string result = data.Substring(index).Substring(data.IndexOf(':', index) - index + 1);
-                if (result.Contains("PRIVMSG"))
-                {
-                    string user = result.Substring(0, result.IndexOf('!'));
-                    string channel = result.Substring(0, result.IndexOf(':') - 1).Substring(result.IndexOf('#'));
-                    string message = result.Substring(result.IndexOf(':') + 1);
 
-                    writer.WriteLine($"{channel} {user}: {message}\n");
-                    Console.WriteLine($"{channel} {user}: {message}\n");
-                }
+            int index = data.IndexOf("user-type=", StringComparison.Ordinal);
+            if (index == -1) return;
+
+            string result = data[index..][(data.IndexOf(':', index) - index + 1)..];
+            if (!result.Contains("PRIVMSG")) return;
+
+            string user = result[..result.IndexOf('!')];
+            string channel = result[..(result.IndexOf(':') - 1)][result.IndexOf('#')..];
+            string message = result[(result.IndexOf(':') + 1)..];
+
+            SQLiteConnectionStringBuilder connectionStringBuilder = new SQLiteConnectionStringBuilder
+            {
+                DataSource = "../../../BotDB.db",
+                Version = 3
+            };
+
+            DynamicParameters parameters = new DynamicParameters();
+            parameters.Add("@Channel", channel);
+            parameters.Add("@User", user);
+            parameters.Add("@Message", message);
+
+            using (IDbConnection cnn = new SQLiteConnection(connectionStringBuilder.ConnectionString))
+            {
+                cnn.Execute("INSERT INTO Logs (Channel, User, Message) VALUES (@Channel, @User, @Message)", parameters);
             }
-            writer.Close();
-            ostrm.Close();
+
+            Console.WriteLine($"{channel} {user}: {message}\n");
         }
     }
 }
